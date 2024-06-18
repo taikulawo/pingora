@@ -25,9 +25,9 @@ use std::os::unix::net::UnixListener as StdUnixListener;
 use std::time::Duration;
 use tokio::net::TcpSocket;
 
-use crate::protocols::l4::ext::set_tcp_fastopen_backlog;
 use crate::protocols::l4::listener::Listener;
 pub use crate::protocols::l4::stream::Stream;
+use crate::protocols::l4::{ext::set_tcp_fastopen_backlog, stream::TryAsRawFd};
 use crate::protocols::TcpKeepalive;
 use crate::server::ListenFds;
 
@@ -242,6 +242,13 @@ impl ListenerEndpoint {
         }
     }
 
+    pub fn new_with_listener(addr: ServerAddress, listener: Listener) -> Self {
+        ListenerEndpoint {
+            listen_addr: addr,
+            listener: Some(listener),
+        }
+    }
+
     pub fn as_str(&self) -> &str {
         self.listen_addr.as_ref()
     }
@@ -260,7 +267,9 @@ impl ListenerEndpoint {
             } else {
                 // not found
                 let listener = bind(&self.listen_addr).await?;
-                table.add(addr.to_string(), listener.as_raw_fd());
+                if let Some(fd) = listener.try_as_raw_fd() {
+                    table.add(addr.to_string(), fd);
+                }
                 listener
             }
         } else {

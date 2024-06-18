@@ -124,7 +124,9 @@ impl Listeners {
         listeners.add_tls(addr, cert_path, key_path)?;
         Ok(listeners)
     }
+    pub fn add_listener() {
 
+    }
     /// Add a TCP endpoint to `self`.
     pub fn add_tcp(&mut self, addr: &str) {
         self.add_address(ServerAddress::Tcp(addr.into(), None));
