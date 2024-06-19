@@ -1,29 +1,45 @@
 use std::{
     io,
+    net::SocketAddr,
     pin::Pin,
     sync::Arc,
     task::{Context, Poll},
+    time::SystemTime,
 };
 
 use async_trait::async_trait;
 use log::debug;
 use pingora::{
-    http::RequestHeader, http_proxy_service_with_name, modules::http::{HttpModule, HttpModuleBuilder, HttpModules}, protocols::{
+    http::RequestHeader,
+    modules::http::{HttpModule, HttpModuleBuilder, HttpModules, Module},
+    protocols::{
         raw_connect::ProxyDigest, GetProxyDigest, GetSocketDigest, GetTimingDigest, Shutdown,
         SocketDigest, Ssl, TimingDigest, ALPN,
-    }, proxy::{http_proxy_service_with_name, HttpProxy, ProxyHttp, Session}, server::configuration::ServerConf, services::Service, upstreams::peer::HttpPeer
+    },
+    proxy::{http_proxy_service_with_name, HttpProxy, ProxyHttp, Session},
+    server::configuration::ServerConf,
+    services::Service,
+    upstreams::peer::HttpPeer,
 };
 use tokio::io::{AsyncRead, AsyncWrite, AsyncWriteExt};
 
-use super::Stream;
+use super::{AnyStream, Stream};
 
 struct PingoraStream<T> {
     s: T,
+    established_ts: SystemTime,
+    socket_digest: Option<Arc<SocketDigest>>,
+    proxy_digest: Option<Arc<ProxyDigest>>,
 }
 
 impl<T> PingoraStream<T> {
     pub fn new(inner: T) -> Self {
-        Self { s: inner }
+        Self {
+            s: inner,
+            established_ts: SystemTime::now(),
+            socket_digest: None,
+            proxy_digest: None,
+        }
     }
 }
 
@@ -124,15 +140,15 @@ impl ProxyHttp for HttpServer {
         session: &mut Session,
         ctx: &mut Self::CTX,
     ) -> pingora::Result<Box<HttpPeer>> {
-        let peer = HttpPeer::new("127.0.0.1:80", false, "example.org".into());
+        let mut peer = HttpPeer::new("127.0.0.1:80", false, "example.org".into());
         peer.options.alpn = ALPN::H1;
         Ok(Box::new(peer))
     }
 }
 struct ChangeOnTheFly {}
-
+#[async_trait]
 impl HttpModule for ChangeOnTheFly {
-    fn request_header_filter(&mut self, _req: &mut RequestHeader) -> pingora::Result<()> {
+    async fn request_header_filter(&mut self, _req: &mut RequestHeader) -> pingora::Result<()> {
         Ok(())
     }
 
@@ -154,20 +170,47 @@ impl HttpModuleBuilder for ChangeOntheFlyBuilder {
         0
     }
 }
-pub fn create_pingora_instance<T>(s: T) {
-    let mut http_module = HttpModules::new();
-    http_module.add_module();
-    let mut ctx = http_module.build_ctx();
-
+pub async fn create_pingora_instance<T>(s: T) {
     let conf = ServerConf {
         ..Default::default()
     };
+    let pingora_stream = PingoraStream::new(s);
     let server = HttpServer {};
     let conf = Arc::new(conf);
-    let mut proxy = HttpProxy::new(server, conf.clone());
-    let svc = http_proxy_service_with_name(&conf, server, "");
+    let mut svc = http_proxy_service_with_name(&conf, server, "");
     if let Some(app) = svc.app_logic_mut() {
         let fly = Box::new(ChangeOntheFlyBuilder {});
         app.downstream_modules.add_module(fly)
+    }
+    let (socket_sender, socket_recv) = tokio::sync::mpsc::unbounded_channel();
+    let roff_listener = RoffListener::new(socket_recv);
+    let (sender, recv) = tokio::sync::watch::channel(false);
+    // TODO Service 需要添加Listener抽象，将roff卸载tls后的请求accept获取，交给pingora处理http2或者http1
+
+    svc.start_service(None, recv).await;
+}
+#[async_trait]
+trait Listener {
+    async fn accept(&mut self) -> io::Result<(AnyStream, SocketAddr)>;
+}
+struct RoffListener {
+    recv: tokio::sync::mpsc::UnboundedReceiver<(AnyStream, SocketAddr)>,
+}
+
+#[async_trait]
+impl Listener for RoffListener {
+    async fn accept(&mut self) -> io::Result<(AnyStream, SocketAddr)> {
+        match self.recv.recv().await {
+            Some(x) => Ok(x),
+            None => {
+                let err = io::Error::new(io::ErrorKind::BrokenPipe, "receiver has been closed");
+                return Err(err);
+            }
+        }
+    }
+}
+impl RoffListener {
+    pub fn new(recv: tokio::sync::mpsc::UnboundedReceiver<(AnyStream, SocketAddr)>) -> Self {
+        Self { recv: recv }
     }
 }
