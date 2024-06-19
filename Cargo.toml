@@ -19,8 +19,6 @@ members = [
     "pingora-load-balancing",
     "pingora-memory-cache",
     "tinyufo",
-    "roff",
-    "rustls/rustls",
 ]
 
 [workspace.dependencies]
