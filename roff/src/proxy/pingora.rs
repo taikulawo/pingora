@@ -156,29 +156,18 @@ impl HttpModuleBuilder for ChangeOntheFlyBuilder {
 }
 pub fn create_pingora_instance<T>(s: T) {
     let mut http_module = HttpModules::new();
-    http_module.add_module(Box::new(ChangeOntheFlyBuilder {}));
+    http_module.add_module();
     let mut ctx = http_module.build_ctx();
 
     let conf = ServerConf {
         ..Default::default()
     };
-    let mut proxy = HttpProxy::new(inner, conf.clone());
     let server = HttpServer {};
     let conf = Arc::new(conf);
+    let mut proxy = HttpProxy::new(server, conf.clone());
     let svc = http_proxy_service_with_name(&conf, server, "");
-}
-/// Create a [Service] from the user implemented [ProxyHttp].
-///
-/// The returned [Service] can be hosted by a [pingora_core::server::Server] directly.
-pub fn xhttp_proxy_service_with_name<SV>(
-    conf: &Arc<ServerConf>,
-    inner: SV,
-    name: &str,
-) -> Service<HttpProxy<SV>> {
-    let mut proxy = HttpProxy::new(inner, conf.clone());
-    // Add disabled downstream compression module by default
-    proxy
-        .downstream_modules
-        .add_module(ResponseCompressionBuilder::enable(0));
-    Service::new(name.to_string(), proxy)
+    if let Some(app) = svc.app_logic_mut() {
+        let fly = Box::new(ChangeOntheFlyBuilder {});
+        app.downstream_modules.add_module(fly)
+    }
 }
