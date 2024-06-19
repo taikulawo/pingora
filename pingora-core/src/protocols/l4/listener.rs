@@ -45,7 +45,7 @@ impl<T> IStream for T where
 pub type AnyStream = Box<dyn IStream>;
 #[async_trait]
 pub trait IListener: Send + Sync + Unpin + 'static + fmt::Debug + TryAsRawFd {
-    async fn accept(&self) -> io::Result<(AnyStream, SocketAddr)>;
+    async fn accept(&mut self) -> io::Result<(AnyStream, SocketAddr)>;
 }
 
 pub type AnyListener = Box<dyn IListener>;
@@ -74,8 +74,8 @@ impl TryAsRawFd for Listener {
 
 impl Listener {
     /// Accept a connection from the listening endpoint
-    pub async fn accept(&self) -> io::Result<Stream> {
-        match &self {
+    pub async fn accept(&mut self) -> io::Result<Stream> {
+        match self {
             Self::Tcp(l) => l.accept().await.map(|(stream, peer_addr)| {
                 let mut s: Stream = stream.into();
                 if let Some(fd) = s.try_as_raw_fd() {
@@ -107,7 +107,7 @@ impl Listener {
                 }
                 s
             }),
-            Self::Any(l) => l.accept().await.map(|(stream, peer_addr)| {
+            Self::Any(ref mut l) => l.accept().await.map(|(stream, peer_addr)| {
                 let mut s: Stream = stream.into();
                 if let Some(fd) = s.try_as_raw_fd() {
                     let digest = SocketDigest::from_raw_fd(fd);
