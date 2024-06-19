@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use async_trait::async_trait;
+use pingora_core::protocols::l4::stream::TryAsRawFd;
 use core::pin::Pin;
 use core::task::{Context, Poll};
 use pingora_cache::lock::WritePermit;
@@ -89,6 +90,11 @@ impl GetProxyDigest for DummyIO {
 
 impl GetSocketDigest for DummyIO {
     fn get_socket_digest(&self) -> Option<Arc<SocketDigest>> {
+        None
+    }
+}
+impl TryAsRawFd for DummyIO {
+    fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
         None
     }
 }

@@ -120,7 +120,6 @@ where
         Pin::new(&mut self.ssl).poll_read(cx, buf)
     }
 }
-
 impl<T> AsyncWrite for SslStream<T>
 where
     T: AsyncRead + AsyncWrite + Unpin,

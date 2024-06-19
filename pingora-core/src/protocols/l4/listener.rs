@@ -18,13 +18,12 @@ use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::os::unix::io::AsRawFd;
 use std::{fmt, io};
-use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::net::{TcpListener, UnixListener};
 
 use crate::protocols::digest::{GetSocketDigest, SocketDigest};
-use crate::protocols::l4::stream::Stream;
+use crate::protocols::Stream as AnyStream;
 
-use super::stream::TryAsRawFd;
+use super::stream::{Stream, TryAsRawFd};
 
 /// The type for generic listener for both TCP and Unix domain socket
 #[derive(Debug)]
@@ -34,15 +33,6 @@ pub enum Listener {
     Any(AnyListener),
 }
 
-pub trait IStream:
-    AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static + fmt::Debug + TryAsRawFd
-{
-}
-impl<T> IStream for T where
-    T: AsyncRead + AsyncWrite + Send + Sync + Unpin + 'static + fmt::Debug + TryAsRawFd
-{
-}
-pub type AnyStream = Box<dyn IStream>;
 #[async_trait]
 pub trait IListener: Send + Sync + Unpin + 'static + fmt::Debug + TryAsRawFd {
     async fn accept(&mut self) -> io::Result<(AnyStream, SocketAddr)>;

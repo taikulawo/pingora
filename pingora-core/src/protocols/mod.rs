@@ -80,6 +80,7 @@ pub trait IO:
     + Debug
     + Send
     + Sync
+    + TryAsRawFd
 {
     /// helper to cast as the reference of the concrete type
     fn as_any(&self) -> &dyn Any;
@@ -99,7 +100,8 @@ impl<
             + Unpin
             + Debug
             + Send
-            + Sync,
+            + Sync
+            + TryAsRawFd,
     > IO for T
 where
     T: 'static,
@@ -142,6 +144,11 @@ mod ext_io_impl {
     }
     impl GetSocketDigest for Mock {
         fn get_socket_digest(&self) -> Option<Arc<SocketDigest>> {
+            None
+        }
+    }
+    impl TryAsRawFd for Mock {
+        fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
             None
         }
     }
@@ -201,13 +208,18 @@ mod ext_io_impl {
             None
         }
     }
+    impl TryAsRawFd for DuplexStream {
+        fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
+            None
+        }
+    }
 }
 
 pub(crate) trait ConnFdReusable {
     fn check_fd_match<V: AsRawFd>(&self, fd: V) -> bool;
 }
 
-use l4::socket::SocketAddr;
+use l4::{socket::SocketAddr, stream::TryAsRawFd};
 use log::{debug, error};
 use nix::sys::socket::{getpeername, SockaddrStorage, UnixAddr};
 use std::{net::SocketAddr as InetSocketAddr, os::unix::prelude::AsRawFd, path::Path};
