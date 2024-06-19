@@ -17,6 +17,7 @@
 use async_trait::async_trait;
 use std::net::SocketAddr;
 use std::os::unix::io::AsRawFd;
+use std::sync::Arc;
 use std::{fmt, io};
 use tokio::net::{TcpListener, UnixListener};
 
@@ -35,10 +36,10 @@ pub enum Listener {
 
 #[async_trait]
 pub trait IListener: Send + Sync + Unpin + 'static + fmt::Debug + TryAsRawFd {
-    async fn accept(&mut self) -> io::Result<(AnyStream, SocketAddr)>;
+    async fn accept(&self) -> io::Result<(AnyStream, SocketAddr)>;
 }
 
-pub type AnyListener = Box<dyn IListener>;
+pub type AnyListener = Arc<dyn IListener>;
 
 impl From<TcpListener> for Listener {
     fn from(s: TcpListener) -> Self {
