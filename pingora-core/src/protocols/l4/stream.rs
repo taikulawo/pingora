@@ -228,8 +228,7 @@ impl TryAsRawFd for Stream {
 
 impl UniqueID for Stream {
     fn id(&self) -> i32 {
-        todo!();
-        // self.as_raw_fd()
+        self.try_as_raw_fd().unwrap_or(0)
     }
 }
 
