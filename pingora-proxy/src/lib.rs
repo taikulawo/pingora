@@ -681,7 +681,7 @@ where
 
         session.subrequest_ctx.replace(sub_req_ctx);
         trace!("processing subrequest");
-        let ctx = self.inner.new_ctx();
+        let ctx = self.inner.new_ctx(&mut session).await;
         self.process_request(session, ctx).await;
         trace!("subrequest done");
     }
@@ -714,7 +714,7 @@ where
             session.set_keepalive(Some(60));
         }
 
-        let ctx = self.inner.new_ctx();
+        let ctx = self.inner.new_ctx(&mut session).await;
         self.process_request(session, ctx).await
     }
 

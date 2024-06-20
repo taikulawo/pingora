@@ -31,7 +31,7 @@ struct Router {
 #[async_trait]
 impl ProxyHttp for Router {
     type CTX = ();
-    fn new_ctx(&self) {}
+    async fn new_ctx(&self, _sess: &mut Session) {}
 
     async fn upstream_peer(&self, session: &mut Session, _ctx: &mut ()) -> Result<Box<HttpPeer>> {
         // determine LB cluster based on request uri
