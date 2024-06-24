@@ -106,7 +106,7 @@ fn response_filter_common(
 #[async_trait]
 impl ProxyHttp for ExampleProxyHttps {
     type CTX = CTX;
-    fn new_ctx(&self) -> Self::CTX {
+    async fn new_ctx(&self, _sess: &mut Session) -> Self::CTX {
         CTX::default()
     }
 
@@ -203,7 +203,7 @@ pub struct ExampleProxyHttp {}
 #[async_trait]
 impl ProxyHttp for ExampleProxyHttp {
     type CTX = CTX;
-    fn new_ctx(&self) -> Self::CTX {
+    async fn new_ctx(&self, _sess: &mut Session) -> Self::CTX {
         CTX::default()
     }
 
@@ -311,7 +311,7 @@ pub struct ExampleProxyCache {}
 #[async_trait]
 impl ProxyHttp for ExampleProxyCache {
     type CTX = CacheCTX;
-    fn new_ctx(&self) -> Self::CTX {
+    async fn new_ctx(&self, _sess: &mut Session) -> Self::CTX {
         CacheCTX {
             upstream_status: None,
         }

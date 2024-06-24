@@ -17,7 +17,7 @@
 mod l4;
 mod tls;
 
-use crate::protocols::Stream;
+use crate::protocols::{l4::listener::AnyListener, Stream};
 use crate::server::ListenFds;
 
 use pingora_error::Result;
@@ -124,7 +124,13 @@ impl Listeners {
         listeners.add_tls(addr, cert_path, key_path)?;
         Ok(listeners)
     }
-
+    pub fn add_listener(&mut self, l: AnyListener) {
+        let s = TransportStackBuilder {
+            l4: ServerAddress::Any(l),
+            tls: None,
+        };
+        self.stacks.push(s);
+    }
     /// Add a TCP endpoint to `self`.
     pub fn add_tcp(&mut self, addr: &str) {
         self.add_address(ServerAddress::Tcp(addr.into(), None));

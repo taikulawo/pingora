@@ -43,7 +43,7 @@ pub struct MyCtx {
 #[async_trait]
 impl ProxyHttp for Json2Yaml {
     type CTX = MyCtx;
-    fn new_ctx(&self) -> Self::CTX {
+    async fn new_ctx(&self, _sess: &mut Session) -> Self::CTX {
         MyCtx { buffer: vec![] }
     }
 

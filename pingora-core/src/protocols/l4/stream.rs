@@ -29,8 +29,8 @@ use tokio::net::{TcpStream, UnixStream};
 use crate::protocols::l4::ext::{set_tcp_keepalive, TcpKeepalive};
 use crate::protocols::raw_connect::ProxyDigest;
 use crate::protocols::{
-    GetProxyDigest, GetSocketDigest, GetTimingDigest, Shutdown, SocketDigest, Ssl, TimingDigest,
-    UniqueID,
+    GetProxyDigest, GetSocketDigest, GetTimingDigest, Shutdown, SocketDigest, Ssl,
+    Stream as AnyStream, TimingDigest, UniqueID,
 };
 use crate::upstreams::peer::Tracer;
 
@@ -38,6 +38,7 @@ use crate::upstreams::peer::Tracer;
 enum RawStream {
     Tcp(TcpStream),
     Unix(UnixStream),
+    Any(AnyStream),
 }
 
 impl AsyncRead for RawStream {
@@ -51,6 +52,7 @@ impl AsyncRead for RawStream {
             match &mut Pin::get_unchecked_mut(self) {
                 RawStream::Tcp(s) => Pin::new_unchecked(s).poll_read(cx, buf),
                 RawStream::Unix(s) => Pin::new_unchecked(s).poll_read(cx, buf),
+                RawStream::Any(s) => Pin::new_unchecked(s).poll_read(cx, buf),
             }
         }
     }
@@ -63,6 +65,7 @@ impl AsyncWrite for RawStream {
             match &mut Pin::get_unchecked_mut(self) {
                 RawStream::Tcp(s) => Pin::new_unchecked(s).poll_write(cx, buf),
                 RawStream::Unix(s) => Pin::new_unchecked(s).poll_write(cx, buf),
+                RawStream::Any(s) => Pin::new_unchecked(s).poll_write(cx, buf),
             }
         }
     }
@@ -73,6 +76,7 @@ impl AsyncWrite for RawStream {
             match &mut Pin::get_unchecked_mut(self) {
                 RawStream::Tcp(s) => Pin::new_unchecked(s).poll_flush(cx),
                 RawStream::Unix(s) => Pin::new_unchecked(s).poll_flush(cx),
+                RawStream::Any(s) => Pin::new_unchecked(s).poll_flush(cx),
             }
         }
     }
@@ -83,6 +87,7 @@ impl AsyncWrite for RawStream {
             match &mut Pin::get_unchecked_mut(self) {
                 RawStream::Tcp(s) => Pin::new_unchecked(s).poll_shutdown(cx),
                 RawStream::Unix(s) => Pin::new_unchecked(s).poll_shutdown(cx),
+                RawStream::Any(s) => Pin::new_unchecked(s).poll_shutdown(cx),
             }
         }
     }
@@ -97,6 +102,7 @@ impl AsyncWrite for RawStream {
             match &mut Pin::get_unchecked_mut(self) {
                 RawStream::Tcp(s) => Pin::new_unchecked(s).poll_write_vectored(cx, bufs),
                 RawStream::Unix(s) => Pin::new_unchecked(s).poll_write_vectored(cx, bufs),
+                RawStream::Any(s) => Pin::new_unchecked(s).poll_write_vectored(cx, bufs),
             }
         }
     }
@@ -105,15 +111,20 @@ impl AsyncWrite for RawStream {
         match self {
             RawStream::Tcp(s) => s.is_write_vectored(),
             RawStream::Unix(s) => s.is_write_vectored(),
+            RawStream::Any(s) => s.is_write_vectored(),
         }
     }
 }
+pub trait TryAsRawFd {
+    fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd>;
+}
 
-impl AsRawFd for RawStream {
-    fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
+impl TryAsRawFd for RawStream {
+    fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
         match self {
-            RawStream::Tcp(s) => s.as_raw_fd(),
-            RawStream::Unix(s) => s.as_raw_fd(),
+            RawStream::Tcp(s) => Some(s.as_raw_fd()),
+            RawStream::Unix(s) => Some(s.as_raw_fd()),
+            RawStream::Any(s) => s.try_as_raw_fd(),
         }
     }
 }
@@ -179,6 +190,20 @@ impl From<TcpStream> for Stream {
         }
     }
 }
+impl From<AnyStream> for Stream {
+    fn from(s: AnyStream) -> Self {
+        Stream {
+            stream: BufStream::with_capacity(BUF_READ_SIZE, BUF_WRITE_SIZE, RawStream::Any(s)),
+            buffer_write: true,
+            established_ts: SystemTime::now(),
+            proxy_digest: None,
+            socket_digest: None,
+            tracer: None,
+            read_pending_time: AccumulatedDuration::new(),
+            write_pending_time: AccumulatedDuration::new(),
+        }
+    }
+}
 
 impl From<UnixStream> for Stream {
     fn from(s: UnixStream) -> Self {
@@ -195,15 +220,15 @@ impl From<UnixStream> for Stream {
     }
 }
 
-impl AsRawFd for Stream {
-    fn as_raw_fd(&self) -> std::os::unix::io::RawFd {
-        self.stream.get_ref().as_raw_fd()
+impl TryAsRawFd for Stream {
+    fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
+        self.stream.get_ref().try_as_raw_fd()
     }
 }
 
 impl UniqueID for Stream {
     fn id(&self) -> i32 {
-        self.as_raw_fd()
+        self.try_as_raw_fd().unwrap_or(0)
     }
 }
 
@@ -265,6 +290,7 @@ impl Drop for Stream {
         let ret = match &self.stream.get_ref() {
             RawStream::Tcp(s) => s.nodelay().err(),
             RawStream::Unix(s) => s.local_addr().err(),
+            RawStream::Any(..) => None,
         };
         if let Some(e) = ret {
             match e.kind() {

@@ -15,6 +15,7 @@
 //! TLS client specific implementation
 
 use super::SslStream;
+use crate::protocols::l4::stream::TryAsRawFd;
 use crate::protocols::raw_connect::ProxyDigest;
 use crate::protocols::{
     GetProxyDigest, GetSocketDigest, GetTimingDigest, SocketDigest, TimingDigest, IO,
@@ -110,5 +111,14 @@ where
     }
     fn set_socket_digest(&mut self, socket_digest: SocketDigest) {
         self.get_mut().set_socket_digest(socket_digest)
+    }
+}
+
+impl<S> TryAsRawFd for SslStream<S> 
+where
+    S: TryAsRawFd,
+{
+    fn try_as_raw_fd(&self) -> Option<std::os::unix::io::RawFd> {
+        None
     }
 }

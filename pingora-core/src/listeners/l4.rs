@@ -25,9 +25,9 @@ use std::os::unix::net::UnixListener as StdUnixListener;
 use std::time::Duration;
 use tokio::net::TcpSocket;
 
-use crate::protocols::l4::ext::set_tcp_fastopen_backlog;
-use crate::protocols::l4::listener::Listener;
+use crate::protocols::l4::listener::{AnyListener, Listener};
 pub use crate::protocols::l4::stream::Stream;
+use crate::protocols::l4::{ext::set_tcp_fastopen_backlog, stream::TryAsRawFd};
 use crate::protocols::TcpKeepalive;
 use crate::server::ListenFds;
 
@@ -41,6 +41,7 @@ const LISTENER_BACKLOG: u32 = 65535;
 pub enum ServerAddress {
     Tcp(String, Option<TcpSocketOptions>),
     Uds(String, Option<Permissions>),
+    Any(AnyListener),
 }
 
 impl AsRef<str> for ServerAddress {
@@ -48,6 +49,7 @@ impl AsRef<str> for ServerAddress {
         match &self {
             Self::Tcp(l, _) => l,
             Self::Uds(l, _) => l,
+            Self::Any(..) => "unknown",
         }
     }
 }
@@ -171,6 +173,7 @@ fn from_raw_fd(address: &ServerAddress, fd: i32) -> Result<Listener> {
                 .or_err_with(BindError, || format!("Listen() failed on {address:?}"))?
                 .into())
         }
+        ServerAddress::Any(listener) => Ok(Listener::Any(listener.clone())),
     }
 }
 
@@ -226,6 +229,7 @@ async fn bind(addr: &ServerAddress) -> Result<Listener> {
     match addr {
         ServerAddress::Uds(l, perm) => uds::bind(l, perm.clone()),
         ServerAddress::Tcp(l, opt) => bind_tcp(l, opt.clone()).await,
+        ServerAddress::Any(l) => Ok(Listener::Any(l.clone())),
     }
 }
 
@@ -239,6 +243,13 @@ impl ListenerEndpoint {
         ListenerEndpoint {
             listen_addr,
             listener: None,
+        }
+    }
+
+    pub fn new_with_listener(addr: ServerAddress, listener: Listener) -> Self {
+        ListenerEndpoint {
+            listen_addr: addr,
+            listener: Some(listener),
         }
     }
 
@@ -260,7 +271,9 @@ impl ListenerEndpoint {
             } else {
                 // not found
                 let listener = bind(&self.listen_addr).await?;
-                table.add(addr.to_string(), listener.as_raw_fd());
+                if let Some(fd) = listener.try_as_raw_fd() {
+                    table.add(addr.to_string(), fd);
+                }
                 listener
             }
         } else {

@@ -22,7 +22,7 @@ use crate::protocols::l4::ext::{
     connect_uds, connect_with as tcp_connect, set_recv_buf, set_tcp_fastopen_connect,
 };
 use crate::protocols::l4::socket::SocketAddr;
-use crate::protocols::l4::stream::Stream;
+use crate::protocols::l4::stream::{Stream, TryAsRawFd};
 use crate::protocols::{GetSocketDigest, SocketDigest};
 use crate::upstreams::peer::Peer;
 
@@ -110,13 +110,14 @@ where
         stream.set_keepalive(ka)?;
     }
     stream.set_nodelay()?;
-
-    let digest = SocketDigest::from_raw_fd(stream.as_raw_fd());
-    digest
-        .peer_addr
-        .set(Some(peer_addr.clone()))
-        .expect("newly created OnceCell must be empty");
-    stream.set_socket_digest(digest);
+    if let Some(fd) = stream.try_as_raw_fd() {
+        let digest = SocketDigest::from_raw_fd(fd);
+        digest
+            .peer_addr
+            .set(Some(peer_addr.clone()))
+            .expect("newly created OnceCell must be empty");
+        stream.set_socket_digest(digest);
+    }
 
     Ok(stream)
 }
@@ -222,7 +223,7 @@ mod tests {
     async fn test_conn_error_addr_not_avail() {
         let peer = HttpPeer::new("127.0.0.1:121".to_string(), false, "".to_string());
         let new_session = connect(&peer, Some("192.0.2.2:0".parse().unwrap())).await;
-        assert_eq!(new_session.unwrap_err().etype(), &InternalError)
+        assert_eq!(new_session.unwrap_err().etype(), &ConnectRefused)
     }
 
     #[tokio::test]
