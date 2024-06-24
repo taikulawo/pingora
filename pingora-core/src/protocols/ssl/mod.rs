@@ -225,7 +225,7 @@ impl ALPN {
         }
     }
 
-    pub(crate) fn to_wire_preference(&self) -> &[u8] {
+    pub fn to_wire_preference(&self) -> &[u8] {
         // https://www.openssl.org/docs/manmaster/man3/SSL_CTX_set_alpn_select_cb.html
         // "vector of nonempty, 8-bit length-prefixed, byte strings"
         match self {
@@ -235,7 +235,7 @@ impl ALPN {
         }
     }
 
-    pub(crate) fn from_wire_selected(raw: &[u8]) -> Option<Self> {
+    pub fn from_wire_selected(raw: &[u8]) -> Option<Self> {
         match raw {
             b"http/1.1" => Some(Self::H1),
             b"h2" => Some(Self::H2),
