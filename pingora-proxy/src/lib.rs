@@ -100,7 +100,7 @@ pub struct HttpProxy<SV> {
 }
 
 impl<SV> HttpProxy<SV> {
-    fn new(inner: SV, conf: Arc<ServerConf>) -> Self {
+    pub fn new(inner: SV, conf: Arc<ServerConf>) -> Self {
         HttpProxy {
             inner,
             client_upstream: Connector::new(Some(ConnectorOptions::from_server_conf(&conf))),
