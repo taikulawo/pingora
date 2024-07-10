@@ -15,7 +15,7 @@
 use async_trait::async_trait;
 use std::sync::Arc;
 
-use pingora_core::{prelude::*, services::background::GenBackgroundService};
+use pingora_core::{prelude::*, protocols::http::ServerSession, services::background::GenBackgroundService};
 use pingora_load_balancing::{
     health_check::TcpHealthCheck,
     selection::{BackendIter, BackendSelection, RoundRobin},
@@ -31,7 +31,7 @@ struct Router {
 #[async_trait]
 impl ProxyHttp for Router {
     type CTX = ();
-    fn new_ctx(&self) {}
+    fn new_ctx(&self, _session: &Box<ServerSession>) {}
 
     async fn upstream_peer(&self, session: &mut Session, _ctx: &mut ()) -> Result<Box<HttpPeer>> {
         // determine LB cluster based on request uri

@@ -15,7 +15,7 @@
 use async_trait::async_trait;
 use clap::Parser;
 use log::info;
-use pingora_core::services::background::background_service;
+use pingora_core::{protocols::http::ServerSession, services::background::background_service};
 use std::{sync::Arc, time::Duration};
 
 use pingora_core::server::configuration::Opt;
@@ -30,7 +30,7 @@ pub struct LB(Arc<LoadBalancer<RoundRobin>>);
 #[async_trait]
 impl ProxyHttp for LB {
     type CTX = ();
-    fn new_ctx(&self) -> Self::CTX {}
+    fn new_ctx(&self, _session: &Box<ServerSession>) -> Self::CTX {}
 
     async fn upstream_peer(&self, _session: &mut Session, _ctx: &mut ()) -> Result<Box<HttpPeer>> {
         let upstream = self

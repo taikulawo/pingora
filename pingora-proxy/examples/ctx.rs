@@ -17,7 +17,7 @@ use clap::Parser;
 use log::info;
 use std::sync::Mutex;
 
-use pingora_core::server::configuration::Opt;
+use pingora_core::{protocols::http::ServerSession, server::configuration::Opt};
 use pingora_core::server::Server;
 use pingora_core::upstreams::peer::HttpPeer;
 use pingora_core::Result;
@@ -43,7 +43,7 @@ fn check_beta_user(req: &pingora_http::RequestHeader) -> bool {
 #[async_trait]
 impl ProxyHttp for MyProxy {
     type CTX = MyCtx;
-    fn new_ctx(&self) -> Self::CTX {
+    fn new_ctx(&self, session: &Box<ServerSession>) -> Self::CTX {
         MyCtx { beta_user: false }
     }
 

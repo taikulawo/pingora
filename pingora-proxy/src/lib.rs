@@ -681,6 +681,7 @@ where
         sub_req_ctx: Box<SubReqCtx>,
     ) {
         debug!("starting subrequest");
+        let ctx = self.inner.new_ctx(&session);
         let mut session = match self.handle_new_request(session).await {
             Some(downstream_session) => Session::new(downstream_session, &self.downstream_modules),
             None => return, // bad request
@@ -692,7 +693,6 @@ where
 
         session.subrequest_ctx.replace(sub_req_ctx);
         trace!("processing subrequest");
-        let ctx = self.inner.new_ctx();
         self.process_request(session, ctx).await;
         trace!("subrequest done");
     }
@@ -710,7 +710,7 @@ where
         shutdown: &ShutdownWatch,
     ) -> Option<Stream> {
         let session = Box::new(session);
-
+        let ctx = self.inner.new_ctx(&session);
         // TODO: keepalive pool, use stack
         let mut session = match self.handle_new_request(session).await {
             Some(downstream_session) => Session::new(downstream_session, &self.downstream_modules),
@@ -725,7 +725,6 @@ where
             session.set_keepalive(Some(60));
         }
 
-        let ctx = self.inner.new_ctx();
         self.process_request(session, ctx).await
     }
 

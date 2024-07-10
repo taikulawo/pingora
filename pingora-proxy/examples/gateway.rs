@@ -17,10 +17,10 @@ use clap::Parser;
 use log::info;
 use prometheus::register_int_counter;
 
-use pingora_core::server::configuration::Opt;
 use pingora_core::server::Server;
 use pingora_core::upstreams::peer::HttpPeer;
 use pingora_core::Result;
+use pingora_core::{protocols::http::ServerSession, server::configuration::Opt};
 use pingora_http::ResponseHeader;
 use pingora_proxy::{ProxyHttp, Session};
 
@@ -36,7 +36,7 @@ pub struct MyGateway {
 #[async_trait]
 impl ProxyHttp for MyGateway {
     type CTX = ();
-    fn new_ctx(&self) -> Self::CTX {}
+    fn new_ctx(&self, _session: &Box<ServerSession>) -> Self::CTX {}
 
     async fn request_filter(&self, session: &mut Session, _ctx: &mut Self::CTX) -> Result<bool> {
         if session.req_header().uri.path().starts_with("/login")
