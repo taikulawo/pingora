@@ -77,6 +77,17 @@ impl SocketDigest {
             local_addr: OnceCell::new(),
         }
     }
+    pub fn new(
+        raw_fd: std::os::unix::io::RawFd,
+        peer_addr: Option<SocketAddr>,
+        local_addr: Option<SocketAddr>,
+    ) -> SocketDigest {
+        SocketDigest {
+            raw_fd,
+            peer_addr: OnceCell::with_value(peer_addr),
+            local_addr: OnceCell::with_value(local_addr),
+        }
+    }
 
     pub fn peer_addr(&self) -> Option<&SocketAddr> {
         self.peer_addr
