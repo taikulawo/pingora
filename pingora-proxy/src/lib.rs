@@ -681,17 +681,17 @@ where
         sub_req_ctx: Box<SubReqCtx>,
     ) {
         debug!("starting subrequest");
-        let ctx = self.inner.new_ctx(&session);
         let mut session = match self.handle_new_request(session).await {
             Some(downstream_session) => Session::new(downstream_session, &self.downstream_modules),
             None => return, // bad request
         };
-
+        
         // no real downstream to keepalive, but it doesn't matter what is set here because at the end
         // of this fn the dummy connection will be dropped
         session.set_keepalive(None);
-
+        
         session.subrequest_ctx.replace(sub_req_ctx);
+        let ctx = self.inner.new_ctx(&session);
         trace!("processing subrequest");
         self.process_request(session, ctx).await;
         trace!("subrequest done");
@@ -710,13 +710,12 @@ where
         shutdown: &ShutdownWatch,
     ) -> Option<Stream> {
         let session = Box::new(session);
-        let ctx = self.inner.new_ctx(&session);
         // TODO: keepalive pool, use stack
         let mut session = match self.handle_new_request(session).await {
             Some(downstream_session) => Session::new(downstream_session, &self.downstream_modules),
             None => return None, // bad request
         };
-
+        
         if *shutdown.borrow() {
             // stop downstream from reusing if this service is shutting down soon
             session.set_keepalive(None);
@@ -724,7 +723,8 @@ where
             // default 60s
             session.set_keepalive(Some(60));
         }
-
+        
+        let ctx = self.inner.new_ctx(&session);
         self.process_request(session, ctx).await
     }
 

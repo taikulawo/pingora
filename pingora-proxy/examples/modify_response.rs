@@ -18,10 +18,10 @@ use clap::Parser;
 use serde::{Deserialize, Serialize};
 use std::net::ToSocketAddrs;
 
+use pingora_core::server::configuration::Opt;
 use pingora_core::server::Server;
 use pingora_core::upstreams::peer::HttpPeer;
 use pingora_core::Result;
-use pingora_core::{protocols::http::ServerSession, server::configuration::Opt};
 use pingora_http::ResponseHeader;
 use pingora_proxy::{ProxyHttp, Session};
 
@@ -43,7 +43,7 @@ pub struct MyCtx {
 #[async_trait]
 impl ProxyHttp for Json2Yaml {
     type CTX = MyCtx;
-    fn new_ctx(&self, _session: &Box<ServerSession>) -> Self::CTX {
+    fn new_ctx(&self, _session: &Session) -> Self::CTX {
         MyCtx { buffer: vec![] }
     }
 
