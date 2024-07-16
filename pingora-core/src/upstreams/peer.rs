@@ -172,6 +172,12 @@ pub trait Peer: Display + Clone {
         self.get_peer_options().and_then(|o| o.tcp_recv_buf)
     }
 
+    /// The DSCP value that should be applied to the send side of this connection.
+    /// See the [RFC](https://datatracker.ietf.org/doc/html/rfc2474) for more details.
+    fn dscp(&self) -> Option<u8> {
+        self.get_peer_options().and_then(|o| o.dscp)
+    }
+
     /// Whether to enable TCP fast open.
     fn tcp_fast_open(&self) -> bool {
         self.get_peer_options()
@@ -301,6 +307,7 @@ pub struct PeerOptions {
     pub ca: Option<Arc<Box<[X509]>>>,
     pub tcp_keepalive: Option<TcpKeepalive>,
     pub tcp_recv_buf: Option<usize>,
+    pub dscp: Option<u8>,
     pub no_header_eos: bool,
     pub h2_ping_interval: Option<Duration>,
     // how many concurrent h2 stream are allowed in the same connection
@@ -334,6 +341,7 @@ impl PeerOptions {
             ca: None,
             tcp_keepalive: None,
             tcp_recv_buf: None,
+            dscp: None,
             no_header_eos: false,
             h2_ping_interval: None,
             max_h2_streams: 1,
@@ -403,6 +411,9 @@ pub struct HttpPeer {
     pub sni: String,
     pub proxy: Option<Proxy>,
     pub client_cert_key: Option<Arc<CertKey>>,
+    /// a custom field to isolate connection reuse. Requests with different group keys
+    /// cannot share connections with each other.
+    pub group_key: u64,
     pub options: PeerOptions,
 }
 
@@ -422,6 +433,7 @@ impl HttpPeer {
             sni,
             proxy: None,
             client_cert_key: None,
+            group_key: 0,
             options: PeerOptions::new(),
         }
     }
@@ -462,6 +474,7 @@ impl HttpPeer {
                 headers,
             }),
             client_cert_key: None,
+            group_key: 0,
             options: PeerOptions::new(),
         }
     }
@@ -485,6 +498,7 @@ impl Hash for HttpPeer {
         self.verify_cert().hash(state);
         self.verify_hostname().hash(state);
         self.alternative_cn().hash(state);
+        self.group_key.hash(state);
     }
 }
 
